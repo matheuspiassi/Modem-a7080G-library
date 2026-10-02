@@ -1,0 +1,81 @@
+#######################################
+# Syntax Coloring Map for Modem SIM7080G Library
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+ModemConfig	KEYWORD1
+MqttConfig	KEYWORD1
+GnssInfo	KEYWORD1
+ATCommandManager	KEYWORD1
+NetworkManager	KEYWORD1
+MQTTClient_AT	KEYWORD1
+GNSSManager	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+setupSIM7080	KEYWORD2
+setupSIMA76XX	KEYWORD2
+setupMqtt	KEYWORD2
+setupGNSS	KEYWORD2
+begin	KEYWORD2
+connect	KEYWORD2
+disconnect	KEYWORD2
+connected	KEYWORD2
+publish	KEYWORD2
+subscribe	KEYWORD2
+unsubscribe	KEYWORD2
+onMessage	KEYWORD2
+loop	KEYWORD2
+setSSLCertificates	KEYWORD2
+sendCommand	KEYWORD2
+sendCommandWithData	KEYWORD2
+waitForResponse	KEYWORD2
+setUrcHandler	KEYWORD2
+poll	KEYWORD2
+checkSim	KEYWORD2
+setFunctionality	KEYWORD2
+setNetworkMode	KEYWORD2
+setPreferredLteMode	KEYWORD2
+setBands	KEYWORD2
+setApnSession	KEYWORD2
+setAuthentication	KEYWORD2
+configurePDP	KEYWORD2
+attachGPRS	KEYWORD2
+activateContext	KEYWORD2
+deactivateContext	KEYWORD2
+isContextActive	KEYWORD2
+getSignalQuality	KEYWORD2
+getRegistrationStatus	KEYWORD2
+getSystemInfo	KEYWORD2
+getNetworkApn	KEYWORD2
+getPDPAddress	KEYWORD2
+syncTimeNtp	KEYWORD2
+timeZoneUpdate	KEYWORD2
+infoDateAndTime	KEYWORD2
+configureSSL	KEYWORD2
+uploadFile	KEYWORD2
+convertCertificate	KEYWORD2
+powerOn	KEYWORD2
+powerOff	KEYWORD2
+powerState	KEYWORD2
+setWorkMode	KEYWORD2
+coldStart	KEYWORD2
+warmStart	KEYWORD2
+hotStart	KEYWORD2
+setXtra	KEYWORD2
+copyXtra	KEYWORD2
+getInfo	KEYWORD2
+waitForFix	KEYWORD2
+getLocation	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+LOG_LEVEL_SIMPLE	LITERAL1
+LOG_LEVEL_DEBUG	LITERAL1

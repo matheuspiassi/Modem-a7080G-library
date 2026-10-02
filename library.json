@@ -1,0 +1,52 @@
+{
+  "name": "Modem-sim7080g-library",
+  "version": "1.0.0",
+  "description": "ESP32 library for the SIMCom SIM7080G (LTE CAT-M / NB-IoT) modem with network, NTP, MQTT(S) and GNSS support over AT commands",
+  "keywords": [
+    "esp32",
+    "modem",
+    "sim7080",
+    "sim7080g",
+    "cat-m",
+    "nb-iot",
+    "lte",
+    "mqtt",
+    "gnss",
+    "gps",
+    "at-commands",
+    "cellular",
+    "iot"
+  ],
+  "authors": [
+    {
+      "name": "Thiago",
+      "email": "th2006zadosa@gmail.com",
+      "maintainer": true
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RadCom-Comunity/Modem-a7880G-library.git"
+  },
+  "homepage": "https://github.com/RadCom-Comunity/Modem-a7880G-library",
+  "license": "MIT",
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "export": {
+    "exclude": [
+      ".git",
+      ".github",
+      ".vscode",
+      ".pio",
+      "test",
+      "*.md",
+      "platformio.ini"
+    ]
+  },
+  "examples": [
+    "examples/BasicConnection/BasicConnection.cpp",
+    "examples/MQTTPublish/MQTTPublish.cpp",
+    "examples/GNSSTracking/GNSSTracking.cpp"
+  ],
+  "dependencies": []
+}
