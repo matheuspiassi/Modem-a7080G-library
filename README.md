@@ -21,13 +21,15 @@ lib_deps =
 
 ```cpp
 ModemConfig modemCfg = {
-    "zap.vivo.com.br", "vivo", "vivo", // APN, usuário, senha
+    nullptr, nullptr, nullptr,         // APN (nullptr = automático), usuário, senha
     16, 17,                            // RX, TX do ESP32 (Serial2)
     -1,                                // pino de reset/PWRKEY (-1 = não usa)
     LOG_LEVEL_SIMPLE,
-    38,                                // AT+CNMP: 38 = só LTE (0 = não altera)
-    1,                                 // AT+CMNB: 1 CAT-M, 2 NB-IoT, 3 ambos (0 = não altera)
-    115200};                           // baud rate (0 = 115200)
+    RADIO_CATM,                        // modo tentado primeiro (RADIO_CATM ou RADIO_NBIOT)
+    nullptr,                           // bandas CAT-M  (nullptr = mantém as do módulo)
+    "28",                              // bandas NB-IoT (nullptr = mantém as do módulo)
+    115200,                            // baud rate (0 = 115200)
+    0};                                // tempo máx. de registro por modo (0 = 120 s)
 
 MqttConfig mqttCfg = {
     "meu-dispositivo",                 // clientId
@@ -43,11 +45,13 @@ void setup() {
     setupSIM7080(modemCfg, -12);       // -12 quartos de hora = UTC-3 (NTP)
     setupMqtt(mqttCfg);                // setupMqtt(mqttCfg, true) para TLS
     setupGNSS();                       // liga o GNSS
+    startModemSupervisor(30000);       // reconexão autônoma CAT-M <-> NB-IoT
 }
 
 void loop() {
     mqtt.loop();                       // entrega as mensagens recebidas ao callback
-    mqtt.publish("dispositivo/status", "{\"ok\":1}");
+    if (modemOnline() && mqtt.isConnectedCached())
+        mqtt.publish("dispositivo/status", "{\"ok\":1}");
 
     GnssInfo pos;
     if (gnss.getInfo(pos) && pos.fixed)
@@ -61,10 +65,35 @@ Exemplos completos em [examples/](examples/).
 ## O que `setupSIM7080()` faz
 
 1. `AT` (auto-baud), `ATE0`, `AT+CMEE=2`, `AT+CPIN?`
-2. `AT+CFUN=0` → `AT+CNMP` / `AT+CMNB` / `AT+CGDCONT` / `AT+CGAUTH` → `AT+CFUN=1`
-3. Aguarda registro (`AT+CEREG?`, com fallback para `AT+CREG?`)
-4. `AT+CNCFG=0,...` e `AT+CNACT=0,1` (contexto de aplicação usado por MQTT e NTP)
-5. `AT+CNTPCID` / `AT+CNTP` e leitura do relógio (`AT+CCLK?`)
+2. Conecta no modo `firstMode` (CAT-M por padrão):
+   `AT+CFUN=0` → `AT+CNMP=38` / `AT+CMNB=1` (CAT-M) ou `2` (NB-IoT) / `AT+CBANDCFG` / `AT+CGDCONT` / `AT+CGAUTH` → `AT+CFUN=1` → `AT+COPS=0`
+3. Aguarda registro (`AT+CEREG?`) por até `registerTimeoutMs`
+4. APN: o de `ModemConfig.apn` ou, se `nullptr`, o entregue pela rede (`AT+CGNAPN`)
+5. `AT+CNCFG=0,...` e `AT+CNACT=0,1` (contexto de aplicação usado por MQTT e NTP)
+6. Se os passos 2–5 falharem, repete tudo no **outro modo** (CAT-M → NB-IoT ou NB-IoT → CAT-M)
+7. `AT+CNTPCID` / `AT+CNTP` e leitura do relógio (`AT+CCLK?`)
+
+## Conexão autônoma (CAT-M ↔ NB-IoT)
+
+`startModemSupervisor(intervalMs)` cria uma task que chama `modemMaintain()` periodicamente. Se preferir, chame `modemMaintain()` no seu `loop()`. A cada ciclo:
+
+| Situação | Ação |
+|---|---|
+| Modem não responde a `AT` | Reinicializa a comunicação e reconecta |
+| Registrado, mas contexto de dados inativo | `AT+CNACT=0,1` no mesmo modo |
+| Registro ou dados perdidos por mais de 60 s | Troca para o **outro** modo. Se falhar, volta ao modo anterior |
+| MQTT caído | Reconecta (`setupMqtt` com a config guardada) e refaz o subscribe |
+| MQTT falha 3 vezes seguidas com a rede "ok" | Troca de modo |
+| 3 trocas seguidas sem sucesso | Reinicia o modem (`AT+CFUN=1,1`) |
+
+- `modemOnline()` / `modemActiveMode()` devolvem o último estado sem enviar comando AT.
+- `switchRadioMode()` força a troca de modo na hora.
+- Se `setupSIM7080()` falhar no boot, o supervisor continua tentando. `setupMqtt()` sem rede só guarda a configuração, e o supervisor conecta quando a rede subir.
+- Durante uma reconexão o modem fica ocupado e publicações falham. Confira `modemOnline() && mqtt.isConnectedCached()` antes de publicar.
+
+### APN automático
+
+A biblioteca não tem APN fixo. Com `apn = nullptr`, o attach é feito com `AT+CGDCONT=1,"IP",""` e a rede entrega o APN padrão do chip. Esse APN é lido com `AT+CGNAPN` e usado no `AT+CNCFG`. Se a operadora exigir um APN específico no attach, preencha `ModemConfig.apn`.
 
 ## Objetos globais
 
@@ -122,7 +151,9 @@ gnss.setWorkMode(true);   // GPS + GLONASS (só uma constelação extra; vale ap
 | `+CNTP: 0` = sucesso | `+CNTP: 1` = sucesso |
 | — | `gnss` / `setupGNSS()` |
 
-`ModemConfig` e `MqttConfig` ganharam campos no final. Em código que inicializa as structs por chaves, os campos omitidos ficam com 0/nullptr, que significa "usar o padrão".
+`MqttConfig` ganhou campos no final. Em código que inicializa as structs por chaves, os campos omitidos ficam com 0/nullptr, que significa "usar o padrão".
+
+Em `ModemConfig`, `networkMode` (`AT+CNMP`) e `lteMode` (`AT+CMNB`) foram trocados por `firstMode`, `catmBands`, `nbiotBands` e `registerTimeoutMs`. Código antigo terminado em `38, 1, 115200` não compila mais. Troque por `RADIO_CATM, nullptr, nullptr, 115200, 0`.
 
 ## Logs
 

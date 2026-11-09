@@ -1,5 +1,6 @@
 #include "NetworkManager.h"
 #include "Logging.h"
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <sstream>
@@ -72,6 +73,30 @@ bool NetworkManager::setBands(const std::string &mode, const std::string &bandLi
     return true;
 }
 
+bool NetworkManager::setBands(RadioMode mode, const std::string &bandList) {
+    return setBands(mode == RADIO_CATM ? "CAT-M" : "NB-IOT", bandList);
+}
+
+bool NetworkManager::setRadioMode(RadioMode mode) {
+    if (mode != RADIO_CATM && mode != RADIO_NBIOT) {
+        LOG_ERROR("NET", "Invalid radio mode %d", (int)mode);
+        return false;
+    }
+    LOG_INFO("NET", "Locking radio to %s", radioModeName(mode));
+    return setNetworkMode(38) &&                                  // somente LTE
+           setPreferredLteMode(mode == RADIO_CATM ? 1 : 2);       // 1 CAT-M, 2 NB-IoT
+}
+
+bool NetworkManager::setOperatorAutomatic() {
+    LOG_INFO("NET", "Automatic operator selection (AT+COPS=0)");
+    std::string resp;
+    if (!at.sendCommand("AT+COPS=0", "OK", resp, 60000)) {
+        LOG_WARN("NET", "AT+COPS=0 failed: %s", resp.c_str());
+        return false;
+    }
+    return true;
+}
+
 // ============================================================
 // Sinal / registro
 // ============================================================
@@ -95,23 +120,45 @@ bool NetworkManager::getRegistrationStatus(int &n, int &stat) {
     LOG_INFO("NET", "getRegistrationStatus() called");
     std::string resp;
 
-    // CAT-M / NB-IoT registram em EPS (CEREG)
-    if (at.sendCommand("AT+CEREG?", "+CEREG:", resp, 5000) &&
-        sscanf(resp.c_str(), "+CEREG: %d,%d", &n, &stat) == 2) {
-        LOG_INFO("NET", "EPS registration: n=%d, stat=%d", n, stat);
-        if (stat == 1 || stat == 5)
-            return true;
+    // CAT-M e NB-IoT registram em EPS (CEREG)
+    if (!at.sendCommand("AT+CEREG?", "+CEREG:", resp, 5000)) {
+        LOG_ERROR("NET", "AT+CEREG? failed: %s", resp.c_str());
+        return false;
     }
 
-    // Fallback GSM/GPRS (SIM7080G com AT+CNMP=13/51)
-    if (at.sendCommand("AT+CREG?", "+CREG:", resp, 5000) &&
-        sscanf(resp.c_str(), "+CREG: %d,%d", &n, &stat) == 2) {
-        LOG_INFO("NET", "CS registration: n=%d, stat=%d", n, stat);
-        return true;
+    // Resposta: +CEREG: <n>,<stat>[,...]
+    // URC (com AT+CEREG=1/2 ativo) que pode chegar no lugar: +CEREG: <stat>[,"tac",...]
+    int a = -1, b = -1;
+    int matched = sscanf(resp.c_str(), "+CEREG: %d,%d", &a, &b);
+    if (matched == 2) {
+        n = a;
+        stat = b;
+    } else if (matched == 1) {
+        n = -1;
+        stat = a;
+    } else {
+        LOG_ERROR("NET", "Failed to parse CEREG: %s", resp.c_str());
+        return false;
     }
+    LOG_INFO("NET", "EPS registration: n=%d, stat=%d", n, stat);
+    return true;
+}
 
-    LOG_ERROR("NET", "Failed to read registration status");
-    return false;
+bool NetworkManager::isRegistered() {
+    int n = 0, stat = 0;
+    return getRegistrationStatus(n, stat) && (stat == 1 || stat == 5);
+}
+
+RadioMode NetworkManager::getActiveMode() {
+    std::string info;
+    // Ex.: +CPSI: LTE CAT-M1,Online,...  /  +CPSI: LTE NB-IOT,Online,...
+    if (!getSystemInfo(info))
+        return RADIO_UNKNOWN;
+    if (info.find("NB-IOT") != std::string::npos)
+        return RADIO_NBIOT;
+    if (info.find("CAT-M") != std::string::npos)
+        return RADIO_CATM;
+    return RADIO_UNKNOWN;
 }
 
 bool NetworkManager::getSystemInfo(std::string &info) {
@@ -142,6 +189,20 @@ bool NetworkManager::getNetworkApn(std::string &apn) {
         return false;
     }
     apn = buf;
+
+    // Algumas redes devolvem o APN completo (APN-NI + APN-OI):
+    // "apn.operadora.mnc010.mcc724.gprs" -> "apn.operadora"
+    std::string lower = apn;
+    for (auto &c : lower)
+        c = (char)tolower((unsigned char)c);
+    size_t mnc = lower.find(".mnc");
+    if (mnc != std::string::npos && lower.find(".mcc", mnc) != std::string::npos)
+        apn.erase(mnc);
+
+    if (apn.empty()) {
+        LOG_WARN("NET", "Network APN is empty");
+        return false;
+    }
     LOG_INFO("NET", "Network APN: %s", apn.c_str());
     return true;
 }
@@ -325,13 +386,12 @@ bool NetworkManager::getPDPAddress(int pdpIdx, std::string &address) {
 bool NetworkManager::init(const std::string &apn,
                           const std::string &user,
                           const std::string &password) {
-    if (!setApnSession(apn))
-        return false;
-    if (!user.empty()) {
-        if (!setAuthentication(1, 3, password, user))
-            LOG_WARN("NET", "CGAUTH failed, continuing with CNCFG credentials");
+    std::string useApn = apn;
+    if (useApn.empty() && !getNetworkApn(useApn)) {
+        LOG_WARN("NET", "No APN from network, using empty APN (default bearer)");
+        useApn.clear();
     }
-    if (!configurePDP(0, apn, user, password))
+    if (!configurePDP(0, useApn, user, password))
         return false;
     return activateContext(0);
 }

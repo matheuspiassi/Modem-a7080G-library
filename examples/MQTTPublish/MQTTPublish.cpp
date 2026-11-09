@@ -1,15 +1,19 @@
 /**
  * Exemplo MQTT: conecta ao broker, assina um tópico e publica a cada 30 s.
  * Mensagens recebidas chegam pelo callback chamado dentro de mqtt.loop().
+ *
+ * O supervisor reconecta a rede (trocando CAT-M <-> NB-IoT) e o MQTT sozinho.
  */
 #include <Arduino.h>
 #include <ModemSIM7080G.h>
 
 ModemConfig modemCfg = {
-    "zap.vivo.com.br", "vivo", "vivo",
+    nullptr, nullptr, nullptr, // APN automático, sem usuário/senha
     16, 17, -1,
     LOG_LEVEL_SIMPLE,
-    38, 1, 115200};
+    RADIO_CATM,                // CAT-M primeiro, NB-IoT como reserva
+    nullptr, "28",             // bandas CAT-M / NB-IoT
+    115200, 0};
 
 void onMqttMessage(const std::string &topic, const std::string &payload)
 {
@@ -34,10 +38,9 @@ void setup()
     Serial.begin(115200);
     Serial1.begin(115200);
 
-    if (!setupSIM7080(modemCfg))
-        return;
-
-    setupMqtt(mqttCfg, false); // true = MQTT sobre TLS
+    setupSIM7080(modemCfg);
+    setupMqtt(mqttCfg, false);   // true = MQTT sobre TLS. Sem rede, só guarda a config.
+    startModemSupervisor(30000); // rede + MQTT autônomos
 }
 
 void loop()
@@ -48,10 +51,10 @@ void loop()
     {
         lastPublish = millis();
 
-        if (!mqtt.connected())
+        // Durante uma reconexão a publicação é pulada (o supervisor está trabalhando)
+        if (!modemOnline() || !mqtt.isConnectedCached())
         {
-            Serial.println("MQTT desconectado, reconectando...");
-            setupMqtt(mqttCfg, false);
+            Serial.println("Sem conexão no momento, publicação pulada");
             return;
         }
 

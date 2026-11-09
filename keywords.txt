@@ -79,3 +79,19 @@ getLocation	KEYWORD2
 
 LOG_LEVEL_SIMPLE	LITERAL1
 LOG_LEVEL_DEBUG	LITERAL1
+setRadioMode	KEYWORD2
+setOperatorAutomatic	KEYWORD2
+isRegistered	KEYWORD2
+getActiveMode	KEYWORD2
+modemMaintain	KEYWORD2
+startModemSupervisor	KEYWORD2
+stopModemSupervisor	KEYWORD2
+switchRadioMode	KEYWORD2
+modemOnline	KEYWORD2
+modemActiveMode	KEYWORD2
+radioModeName	KEYWORD2
+otherRadioMode	KEYWORD2
+RadioMode	KEYWORD1
+RADIO_CATM	LITERAL1
+RADIO_NBIOT	LITERAL1
+RADIO_UNKNOWN	LITERAL1

@@ -8,10 +8,12 @@
 #include <ModemSIM7080G.h>
 
 ModemConfig modemCfg = {
-    "zap.vivo.com.br", "vivo", "vivo",
+    nullptr, nullptr, nullptr, // APN automático, sem usuário/senha
     16, 17, -1,
     LOG_LEVEL_SIMPLE,
-    38, 1, 115200};
+    RADIO_CATM,                // CAT-M primeiro, NB-IoT como reserva
+    nullptr, "28",             // bandas CAT-M / NB-IoT
+    115200, 0};
 
 MqttConfig mqttCfg = {
     "sim7080-tracker",
@@ -29,14 +31,14 @@ void setup()
     Serial.begin(115200);
     Serial1.begin(115200);
 
-    if (!setupSIM7080(modemCfg))
-        return;
+    setupSIM7080(modemCfg);
 
     // Opcional (vale após reboot): GPS + GLONASS
     // gnss.setWorkMode(true);
 
-    setupGNSS(0); // só liga; o fix é aguardado no loop
-    setupMqtt(mqttCfg);
+    setupGNSS(0);      // só liga; o fix é aguardado no loop
+    setupMqtt(mqttCfg); // sem rede, só guarda a config
+    startModemSupervisor(30000);
 }
 
 void loop()
