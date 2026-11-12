@@ -9,6 +9,7 @@
 ModemConfig	KEYWORD1
 MqttConfig	KEYWORD1
 GnssInfo	KEYWORD1
+CellInfo	KEYWORD1
 ATCommandManager	KEYWORD1
 NetworkManager	KEYWORD1
 MQTTClient_AT	KEYWORD1
@@ -52,6 +53,11 @@ isContextActive	KEYWORD2
 getSignalQuality	KEYWORD2
 getRegistrationStatus	KEYWORD2
 getSystemInfo	KEYWORD2
+getActiveBand	KEYWORD2
+parseCpsi	KEYWORD2
+parseBandNumber	KEYWORD2
+isSupportedBand	KEYWORD2
+formatCellSummary	KEYWORD2
 getNetworkApn	KEYWORD2
 getPDPAddress	KEYWORD2
 syncTimeNtp	KEYWORD2
@@ -79,3 +85,19 @@ getLocation	KEYWORD2
 
 LOG_LEVEL_SIMPLE	LITERAL1
 LOG_LEVEL_DEBUG	LITERAL1
+setRadioMode	KEYWORD2
+setOperatorAutomatic	KEYWORD2
+isRegistered	KEYWORD2
+getActiveMode	KEYWORD2
+modemMaintain	KEYWORD2
+startModemSupervisor	KEYWORD2
+stopModemSupervisor	KEYWORD2
+switchRadioMode	KEYWORD2
+modemOnline	KEYWORD2
+modemActiveMode	KEYWORD2
+radioModeName	KEYWORD2
+otherRadioMode	KEYWORD2
+RadioMode	KEYWORD1
+RADIO_CATM	LITERAL1
+RADIO_NBIOT	LITERAL1
+RADIO_UNKNOWN	LITERAL1

@@ -3,9 +3,33 @@
 
 #include <string>
 #include "ATCommandManager.h"
+#include "CellInfo.h"
+
+/// Modo de acesso LTE do SIM7080G.
+enum RadioMode : int
+{
+    RADIO_CATM = 0,    ///< LTE CAT-M1  (AT+CNMP=38, AT+CMNB=1)
+    RADIO_NBIOT = 1,   ///< LTE NB-IoT  (AT+CNMP=38, AT+CMNB=2)
+    RADIO_UNKNOWN = -1
+};
+
+/// O outro modo (CAT-M <-> NB-IoT).
+inline RadioMode otherRadioMode(RadioMode m)
+{
+    return m == RADIO_NBIOT ? RADIO_CATM : RADIO_NBIOT;
+}
+
+/// "CAT-M" / "NB-IoT"
+inline const char *radioModeName(RadioMode m)
+{
+    return m == RADIO_CATM ? "CAT-M" : (m == RADIO_NBIOT ? "NB-IoT" : "desconhecido");
+}
 
 /**
- * Gerenciamento de rede do SIM7080G (LTE CAT-M / NB-IoT / GSM).
+ * Gerenciamento de rede do SIM7080G (LTE CAT-M / NB-IoT).
+ *
+ * O rádio é travado em um modo por vez (AT+CNMP=38 + AT+CMNB=1 ou 2). A troca
+ * automática entre CAT-M e NB-IoT é feita por setupSIM7080() / modemMaintain().
  *
  * No SIM7080G os serviços internos (MQTT, HTTP, NTP, TCP) usam o contexto
  * de aplicação configurado com AT+CNCFG e ativado com AT+CNACT (<pdpidx> 0..3),
@@ -21,17 +45,48 @@ public:
     bool setFunctionality(int fun, int rst = 0);              ///< AT+CFUN=<fun>[,<rst>]
     bool setNetworkMode(int mode);                            ///< AT+CNMP: 2 auto, 13 GSM, 38 LTE, 51 GSM+LTE
     bool setPreferredLteMode(int mode);                       ///< AT+CMNB: 1 CAT-M, 2 NB-IoT, 3 ambos
+
+    /**
+     * Trava o rádio em um modo: AT+CNMP=38 (só LTE) + AT+CMNB=1 (CAT-M) ou 2 (NB-IoT).
+     * Envie com AT+CFUN=0 para valer no próximo attach.
+     */
+    bool setRadioMode(RadioMode mode);
+
     bool setBands(const std::string &mode,                    ///< AT+CBANDCFG="CAT-M"|"NB-IOT",<b1>[,<b2>...]
                   const std::string &bandList);
+    bool setBands(RadioMode mode, const std::string &bandList); ///< Idem, pelo RadioMode
+
+    bool setOperatorAutomatic();                              ///< AT+COPS=0
 
     // ---------- Sinal / registro ----------
     bool getSignalQuality(int &rssi, int &ber);               ///< AT+CSQ
-    bool getRegistrationStatus(int &n, int &stat);            ///< AT+CEREG? (fallback AT+CREG?)
+    bool getRegistrationStatus(int &n, int &stat);            ///< AT+CEREG?
+    bool isRegistered();                                      ///< AT+CEREG? com stat 1 (casa) ou 5 (roaming)
     bool getSystemInfo(std::string &info);                    ///< AT+CPSI?
-    bool getNetworkApn(std::string &apn);                     ///< AT+CGNAPN
+    RadioMode getActiveMode();                                ///< AT+CPSI?: "LTE CAT-M1" / "LTE NB-IOT"
+
+    /**
+     * Banda em uso e métricas da célula servidora (AT+CPSI?, timeout 3 s).
+     *
+     * Não confundir com AT+CBANDCFG?, que lista as bandas habilitadas para busca.
+     *
+     * @param info              Resultado (banda, EARFCN, RSRP/RSRQ/RSSI/SINR, MCC-MNC...)
+     * @param checkRegistration Consulta AT+CEREG? antes. Se <stat> não for 1 (casa) ou
+     *                          5 (roaming), retorna true com info.registered = false
+     *                          sem enviar AT+CPSI?. CEREG cobre só LTE: para GSM use false.
+     * @return false em timeout, ERROR / +CME ERROR ou resposta fora do formato.
+     *         "+CPSI: NO SERVICE" não é erro: retorna true com info.registered = false.
+     */
+    bool getActiveBand(CellInfo &info, bool checkRegistration = true);
+
+    /**
+     * APN entregue pela rede no attach (AT+CGNAPN), sem o sufixo
+     * ".mncXXX.mccYYY.gprs" quando a rede o inclui.
+     */
+    bool getNetworkApn(std::string &apn);
 
     // ---------- Contexto de dados ----------
-    bool setApnSession(const std::string &apn);               ///< AT+CGDCONT=1,"IP","apn"
+    bool setApnSession(const std::string &apn = "");          ///< AT+CGDCONT=1,"IP","apn" ("" = APN da rede)
     bool definePDPContext(int cid,
                           const std::string &pdpType = "IP",
                           const std::string &apn = "",
@@ -57,9 +112,10 @@ public:
     bool getPDPAddress(int pdpIdx, std::string &address);     ///< IP do contexto (AT+CNACT?)
 
     /**
-     * Sequência completa de dados: CGDCONT + CGAUTH (opcional) + CNCFG + CNACT.
+     * Contexto de aplicação com o rádio já registrado: CNCFG + CNACT.
+     * @param apn APN a usar; "" = APN entregue pela rede (AT+CGNAPN).
      */
-    bool init(const std::string &apn,
+    bool init(const std::string &apn = "",
               const std::string &user = "",
               const std::string &password = "");
 
